@@ -54,3 +54,134 @@ python train_iql.py
 每个企鹅可执行停留、上、下、左、右五种动作。每个智能体的观测为 14 维坐标向量，包含三个企鹅、一个海豹和三条鱼的位置；缺失对象使用 `-1` 表示。环境支持固定与随机初始布局，每回合最多 200 步，渲染模式包括 `human` 与 `rgb_array`。
 
 本仓库保留原有代码、训练模型与结果图，不包含虚拟环境、IDE 设置和 Python 缓存。
+
+## 项目路线图
+
+### V1 — 环境构建与基础训练
+
+**目前进行中。**
+
+目标：建立可靠的多智能体环境，完成 Independent DQN，并验证它在随机地图下的泛化能力。
+
+| 版本 | 内容 | 学习知识 | 状态 |
+| --- | --- | --- | --- |
+| V1.0 | 三企鹅、鱼、海豹、Pygame 可视化 | ParallelEnv、Observation、Action、Reward、Termination | — |
+| V1.1 | Independent DQN 与训练统计 | Independent Q-Learning、Replay Buffer、Target Network、Non-stationarity | — |
+| V1.2 | 随机初始化地图，重新训练 IQL | Generalization、Exploration、过拟合 | — |
+| V1.3 | 固定模型与随机模型的完整测试 | Benchmark、Evaluation、各 Agent 表现差异 | — |
+| V1.4 | 改善环境和 Reward 设计 | Reward Shaping、Reward Hacking、Credit Assignment 入门 | 待开始 |
+| V1.5 | 标准化实验和保存训练指标 | 多随机种子、方差、训练稳定性、环境测试 | 待开始 |
+
+V1.0–V1.3 的状态暂未单独标注。
+
+**V1.3 要完成四组实验：**
+
+1. Random baseline。
+2. 固定模型测试固定地图。
+3. 固定模型测试随机地图。
+4. 随机模型测试随机地图。
+
+**V1.4 重点研究距离奖励是否真的有帮助。** 例如势函数奖励：
+
+$$
+F(s,s')=\gamma\Phi(s')-\Phi(s)
+$$
+
+可以选择鱼的距离构造 $\Phi$，但需要考虑鱼被其他企鹅吃掉、海豹风险、状态终止时的处理，避免设计出容易被反复刷分的奖励。
+
+**V1 完成标准：** 三只企鹅在随机地图下表现优于随机策略，能够稳定复现实验结果，同时我们知道各自的学习差异来自哪里。
+
+### V2 — Competitive MARL：真正开始算法对比
+
+目标：保留三只企鹅争抢有限资源的竞争规则，研究不同学习算法的表现。
+
+| 版本 | 内容 | 学习知识 |
+| --- | --- | --- |
+| V2.0 | 建立算法比较框架 | 相同环境、训练预算和测试种子 |
+| V2.1 | IQL 升级为 Independent Double DQN | Q-value Overestimation、Double Q-Learning |
+| V2.2 | 使用 Independent PPO 训练三只企鹅 | Actor-Critic、On-policy vs Off-policy |
+| V2.3 | 尝试 Parameter Sharing PPO | 参数共享、Agent ID、经验共享 |
+| V2.4 | 分析三只企鹅的竞争行为 | Non-stationarity、Best Response、策略分化 |
+
+建议加入一个实验：**固定两只企鹅的策略，只训练第三只企鹅。** 再和三只企鹅同时训练的结果比较，帮助我们更清楚地理解非平稳性。
+
+V2 完成后，应真正掌握 IQL 和 IPPO 在竞争任务上的区别，而不仅是能够运行代码。
+
+### V3 — Cooperative MARL：合作学习与 CTDE
+
+这是整个项目最重要的算法升级阶段。
+
+目标：修改游戏规则，让三只企鹅一起争取团队收益。例如，总目标可以是尽可能多地吃鱼，并尽量减少被抓数量。
+
+| 版本 | 内容 | 学习知识 |
+| --- | --- | --- |
+| V3.0 | 把环境改成 Team Reward | Cooperative MARL、Global Reward |
+| V3.1 | 实现 VDN | Value Decomposition、团队 Q 值分解 |
+| V3.2 | 实现 QMIX | Mixing Network、Monotonicity、CTDE |
+| V3.3 | 实现 MAPPO | Centralized Critic、Decentralized Actors |
+| V3.4 | 比较 IQL、VDN、QMIX、MAPPO | Credit Assignment、Sample Efficiency、Cooperation |
+
+**VDN：**
+
+$$
+Q_{\mathrm{tot}}=\sum_{i=1}^{3}Q_i
+$$
+
+**QMIX：**
+
+$$
+Q_{\mathrm{tot}}=f_{\mathrm{mix}}(Q_1,Q_2,Q_3,s)
+$$
+
+并满足：
+
+$$
+\frac{\partial Q_{\mathrm{tot}}}{\partial Q_i}\geq 0
+$$
+
+在这个阶段，将 QMIX、MAPPO 的数学原理与实际代码中的网络结构对应起来。
+
+**V3 完成标准：** 在明确的团队奖励下，比较至少三种多智能体学习算法，并研究是否出现有意义的合作行为。
+
+### V4 — Partial Observability：部分可观测
+
+目前三只企鹅能够直接看到整个地图。从 V4 开始，企鹅只能看见周围一部分区域。
+
+| 当前：全局观测 | V4：局部观测 |
+| --- | --- |
+| 直接看到整个地图 | 只能看到自身可视范围内的区域 |
+
+| 版本 | 内容 | 学习知识 |
+| --- | --- | --- |
+| V4.0 | 限制企鹅的可视范围 | Partial Observability、Dec-POMDP |
+| V4.1 | 引入历史观测与记忆 | Recurrent PPO、GRU/LSTM |
+| V4.2 | 企鹅之间发送有限消息 | Multi-Agent Communication |
+| V4.3 | 比较不同观测半径和通信方式 | Information Sharing、Communication Cost |
+
+研究问题：企鹅看不到所有鱼时，如何通过记忆和合作找到资源？
+
+### V5 — Multi-Agent Adversarial RL：让海豹也学习
+
+前面的海豹一直是规则驱动的：`70% 追最近企鹅 + 30% 随机`。这个阶段让海豹也变成一个 RL Agent，环境从 3 个 RL Agent 升级为 4 个。
+
+| 🐧 🐧 🐧 Penguin Team | 对抗 | 🦭 Seal Agent |
+| --- | --- | --- |
+| 吃鱼、存活、合作 | VS | 追逐、捕获、预测 |
+
+| 版本 | 内容 | 学习知识 |
+| --- | --- | --- |
+| V5.0 | 海豹从规则驱动变成 RL Agent | Asymmetric Multi-Agent RL |
+| V5.1 | 分别训练企鹅与海豹 | Adversarial Training |
+| V5.2 | 使用 Self-Play / 历史策略池 | Self-Play、Opponent Sampling |
+| V5.3 | 分析不同对手下的策略表现 | Robustness、Opponent Generalization |
+| V5.4 | 研究合作与竞争同时存在的机制 | Mixed-Motive MARL |
+
+这个阶段引入真正意义上的多智能体对抗：企鹅内部可以合作，企鹅与海豹之间竞争。
+
+### V6 — Research Experiments：把项目做成科研原型
+
+最后一个大版本围绕一个明确的问题设计实验。
+
+| 版本 | 内容 | 学习知识 |
+| --- | --- | --- |
+| V6.0 | 确定 Research Question 与 Hypothesis | 研究问题、基线设计 |
